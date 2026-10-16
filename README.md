@@ -140,7 +140,7 @@ npm install
 npm run build
 ```
 
-重新访问 `http://127.0.0.1:8000/admin` 即可使用。未构建时跳过托管，不影响 API 与 MCP。
+重新访问 `http://127.0.0.1:8000/admin/` 即可使用。未构建时跳过托管，不影响 API 与 MCP。
 
 ### 管理 API
 

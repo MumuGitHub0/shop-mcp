@@ -189,6 +189,14 @@ def create_app(service: ShopService | None = None, base_url: str | None = None) 
     # 管理后台前端构建产物（admin-web/dist）；未构建时跳过，不影响 API 与 MCP。
     admin_dist = Path(__file__).resolve().parents[3] / "admin-web" / "dist"
     if admin_dist.is_dir():
+        # Mount("/admin") 只匹配 /admin/ 及子路径，裸 /admin 会落到下方 MCP 兜底挂载返回 404，
+        # 因此显式重定向补齐斜杠。
+        from fastapi.responses import RedirectResponse
+
+        @app.get("/admin", include_in_schema=False)
+        def admin_index_redirect() -> Response:
+            return RedirectResponse(url="/admin/", status_code=307)
+
         app.mount("/admin", StaticFiles(directory=admin_dist, html=True), name="admin-web")
 
     # MCP 挂载必须放在业务路由之后，避免通配挂载抢占 /api 路径。
