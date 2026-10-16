@@ -59,7 +59,11 @@ def create_mcp_app(service: ShopService, base_url: str | None = None) -> Any:
         products = service.list_products(query, category_id)
         page_size = 20
         start = (page - 1) * page_size
-        return {"items": [product_data(p) for p in products[start : start + page_size]], "page": page, "total": len(products)}
+        return {
+            "items": [product_data(p) for p in products[start : start + page_size]],
+            "page": page,
+            "total": len(products),
+        }
 
     @mcp.tool(annotations={"readOnlyHint": True})
     def get_product(product_id: str) -> dict[str, object]:
@@ -109,8 +113,15 @@ def create_mcp_app(service: ShopService, base_url: str | None = None) -> Any:
         """只在已展示预览且用户明确确认后调用。使用预览返回的一次性确认令牌创建订单。"""
         if not shipping_address.strip():
             raise ShopError(422, "validation_error", "收货地址不能为空")
-        order = service.create_confirmed_order(current_user().id, shipping_address, confirmation_token)
-        return {"order_id": order["id"], "status": order["status"], "points_deducted": order["points_total"], "summary": f"订单已创建，共扣除 {order['points_total']} 积分"}
+        order = service.create_confirmed_order(
+            current_user().id, shipping_address, confirmation_token
+        )
+        return {
+            "order_id": order["id"],
+            "status": order["status"],
+            "points_deducted": order["points_total"],
+            "summary": f"订单已创建，共扣除 {order['points_total']} 积分",
+        }
 
     @mcp.tool(annotations={"readOnlyHint": True})
     def get_my_orders(page: int = 1) -> dict[str, object]:
@@ -118,17 +129,19 @@ def create_mcp_app(service: ShopService, base_url: str | None = None) -> Any:
         if page < 1:
             raise ShopError(422, "validation_error", "页码必须大于零")
         user = current_user()
-        values = [order for order in service.orders.values() if order["user_id"] == user.id]
-        values.sort(key=lambda order: order["created_at"], reverse=True)
-        page_size = 20
-        start = (page - 1) * page_size
+        values, total = service.list_orders(user.id, page, 20)
         return {
             "items": [
-                {"order_id": order["id"], "status": order["status"], "points_total": order["points_total"], "created_at": order["created_at"]}
-                for order in values[start : start + page_size]
+                {
+                    "order_id": order["id"],
+                    "status": order["status"],
+                    "points_total": order["points_total"],
+                    "created_at": order["created_at"],
+                }
+                for order in values
             ],
             "page": page,
-            "total": len(values),
+            "total": total,
         }
 
     return mcp.http_app(path="/mcp", transport="streamable-http", stateless_http=True)

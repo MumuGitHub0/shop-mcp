@@ -48,9 +48,7 @@ _PENDING_TTL_SECONDS = 600
 
 
 def _login_form_html(pending_id: str, error: str | None = None) -> str:
-    error_html = (
-        f'<div class="info-box error"><p>{html.escape(error)}</p></div>' if error else ""
-    )
+    error_html = f'<div class="info-box error"><p>{html.escape(error)}</p></div>' if error else ""
     content = f"""
     <div class="container">
         <h1>积分商城登录</h1>
@@ -69,7 +67,9 @@ def _login_form_html(pending_id: str, error: str | None = None) -> str:
         </form>
     </div>
     """
-    styles = INFO_BOX_STYLES + """
+    styles = (
+        INFO_BOX_STYLES
+        + """
         form { display: flex; flex-direction: column; gap: 14px; max-width: 320px;
                margin: 16px auto 0; }
         label { display: flex; flex-direction: column; gap: 6px; text-align: left; }
@@ -78,6 +78,7 @@ def _login_form_html(pending_id: str, error: str | None = None) -> str:
         button { padding: 10px; background: #1f2937; color: #fff; border: none;
                  border-radius: 6px; cursor: pointer; font-size: 15px; }
     """
+    )
     return create_page(content, title="积分商城登录", additional_styles=styles)
 
 
@@ -102,15 +103,12 @@ class ShopOAuthProvider(OAuthProvider):
             revocation_options=RevocationOptions(enabled=True),
         )
         self._service = service
-        # 与 service 共享同一 dict，persist() 即可随快照落盘。
-        self._clients: dict[str, dict] = service.oauth_clients
-        self._refresh_tokens: dict[str, dict] = service.oauth_refresh_tokens
-        # 授权码与待登录请求为短时一次性数据，进程内即可。
+        # 客户端注册与刷新令牌持久化到数据库；授权码与待登录请求为短时一次性数据，进程内即可。
         self._auth_codes: dict[str, dict] = {}
         self._pending: dict[str, dict] = {}
 
     async def get_client(self, client_id: str) -> OAuthClientInformationFull | None:
-        record = self._clients.get(client_id)
+        record = self._service.get_oauth_client(client_id)
         if record is None:
             return None
         return OAuthClientInformationFull.model_validate(record)
@@ -118,8 +116,7 @@ class ShopOAuthProvider(OAuthProvider):
     async def register_client(self, client_info: OAuthClientInformationFull) -> None:
         if client_info.client_id is None:
             raise ValueError("client_id 不能为空")
-        self._clients[client_info.client_id] = client_info.model_dump(mode="json")
-        self._service.persist()
+        self._service.save_oauth_client(client_info.client_id, client_info.model_dump(mode="json"))
 
     async def authorize(
         self, client: OAuthClientInformationFull, params: AuthorizationParams
@@ -172,7 +169,7 @@ class ShopOAuthProvider(OAuthProvider):
     async def load_refresh_token(
         self, client: OAuthClientInformationFull, refresh_token: str
     ) -> RefreshToken | None:
-        record = self._refresh_tokens.get(refresh_token)
+        record = self._service.get_refresh_token(refresh_token)
         if record is None or record["client_id"] != client.client_id:
             return None
         return RefreshToken(
@@ -191,12 +188,12 @@ class ShopOAuthProvider(OAuthProvider):
         if not refresh_token.subject:
             raise TokenError("invalid_grant", "刷新令牌缺少用户信息")
         # 轮换：旧刷新令牌立即作废，客户端改用新令牌对。
-        self._refresh_tokens.pop(refresh_token.token, None)
+        self._service.delete_refresh_token(refresh_token.token)
         return self._issue_tokens(refresh_token.subject, client.client_id)
 
     async def revoke_token(self, token: AccessToken | RefreshToken) -> None:
-        if isinstance(token, RefreshToken) and self._refresh_tokens.pop(token.token, None) is not None:
-            self._service.persist()
+        if isinstance(token, RefreshToken):
+            self._service.delete_refresh_token(token.token)
 
     async def verify_token(self, token: str) -> AccessToken | None:
         """统一验证入口：OAuth 签发令牌与手工配置的 Bearer HMAC 令牌同源同构。"""
@@ -287,12 +284,7 @@ class ShopOAuthProvider(OAuthProvider):
 
     def _issue_tokens(self, user_id: str, client_id: str) -> OAuthToken:
         refresh = f"rt_{secrets.token_urlsafe(32)}"
-        self._refresh_tokens[refresh] = {
-            "user_id": user_id,
-            "client_id": client_id,
-            "created_at": time.time(),
-        }
-        self._service.persist()
+        self._service.save_refresh_token(refresh, user_id, client_id)
         return OAuthToken(
             access_token=create_token(user_id),
             token_type="Bearer",

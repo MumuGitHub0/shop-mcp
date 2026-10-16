@@ -11,7 +11,6 @@ import os
 from urllib.parse import parse_qs, urlencode, urlparse
 
 import httpx
-import pytest
 from fastmcp import Client
 from fastmcp.client.transports import StreamableHttpTransport
 
@@ -25,9 +24,7 @@ CALLBACK_URI = "http://localhost:9/oauth-callback"
 def _pkce() -> tuple[str, str]:
     verifier = base64.urlsafe_b64encode(os.urandom(32)).decode().rstrip("=")
     challenge = (
-        base64.urlsafe_b64encode(hashlib.sha256(verifier.encode()).digest())
-        .decode()
-        .rstrip("=")
+        base64.urlsafe_b64encode(hashlib.sha256(verifier.encode()).digest()).decode().rstrip("=")
     )
     return verifier, challenge
 
@@ -46,9 +43,7 @@ def _register_client(client: httpx.Client, base_url: str) -> str:
     return response.json()["client_id"]
 
 
-def _start_authorization(
-    client: httpx.Client, base_url: str, client_id: str
-) -> tuple[str, str]:
+def _start_authorization(client: httpx.Client, base_url: str, client_id: str) -> tuple[str, str]:
     """发起授权请求，返回 (登录页 pending_id, PKCE verifier)。"""
     verifier, challenge = _pkce()
     authorize_url = f"{base_url}/authorize?" + urlencode(
@@ -231,8 +226,8 @@ def test_oauth_state_persists_across_restart(tmp_path, server_factory) -> None:
     asyncio.run(scenario())
 
 
-def test_verify_token_accepts_bearer_and_rejects_garbage() -> None:
-    provider = ShopOAuthProvider(ShopService(database_url="memory://"))
+def test_verify_token_accepts_bearer_and_rejects_garbage(tmp_path) -> None:
+    provider = ShopOAuthProvider(ShopService(database_url=f"sqlite:///{tmp_path / 'shop.db'}"))
 
     async def scenario() -> None:
         valid = await provider.verify_token(create_token("user-demo"))

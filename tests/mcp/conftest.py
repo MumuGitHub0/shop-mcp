@@ -24,9 +24,7 @@ def start_server(service: ShopService) -> tuple[str, uvicorn.Server, threading.T
     port = _free_port()
     base_url = f"http://127.0.0.1:{port}"
     app = create_app(service, base_url=base_url)
-    server = uvicorn.Server(
-        uvicorn.Config(app, host="127.0.0.1", port=port, log_level="warning")
-    )
+    server = uvicorn.Server(uvicorn.Config(app, host="127.0.0.1", port=port, log_level="warning"))
     thread = threading.Thread(target=server.run, daemon=True)
     thread.start()
     deadline = time.time() + 15
@@ -37,8 +35,9 @@ def start_server(service: ShopService) -> tuple[str, uvicorn.Server, threading.T
 
 
 @pytest.fixture()
-def base_url() -> Iterator[str]:
-    url, server, thread = start_server(ShopService(database_url="memory://"))
+def base_url(tmp_path) -> Iterator[str]:
+    service = ShopService(database_url=f"sqlite:///{tmp_path / 'shop.db'}")
+    url, server, thread = start_server(service)
     yield url
     server.should_exit = True
     thread.join(timeout=10)

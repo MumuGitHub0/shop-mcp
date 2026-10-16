@@ -65,9 +65,7 @@ def test_mcp_end_to_end_shopping_flow(base_url: str) -> None:
             assert cart.data["points_total"] == 200
 
             with pytest.raises(ToolError) as bad_quantity:
-                await client.call_tool(
-                    "add_to_cart", {"product_id": "product-mug", "quantity": 0}
-                )
+                await client.call_tool("add_to_cart", {"product_id": "product-mug", "quantity": 0})
             assert "数量必须为正数" in str(bad_quantity.value)
 
             preview = await client.call_tool(

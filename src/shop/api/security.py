@@ -32,9 +32,9 @@ def token_expire_seconds() -> int:
     return int(os.getenv("SHOP_TOKEN_EXPIRE_MINUTES", "60")) * 60
 
 
-def create_token(user_id: str) -> str:
+def create_token(user_id: str, role: str = "customer") -> str:
     payload = json.dumps(
-        {"sub": user_id, "exp": int(time.time()) + token_expire_seconds()},
+        {"sub": user_id, "exp": int(time.time()) + token_expire_seconds(), "role": role},
         separators=(",", ":"),
     ).encode()
     body = base64.urlsafe_b64encode(payload).decode().rstrip("=")
@@ -42,8 +42,7 @@ def create_token(user_id: str) -> str:
     return f"{body}.{signature}"
 
 
-def decode_token_details(token: str) -> tuple[str, int]:
-    """解析令牌，返回 (user_id, 过期时间戳)；无效或过期时抛出 ShopError。"""
+def _decode_payload(token: str) -> dict:
     try:
         body, signature = token.split(".", 1)
         expected = hmac.new(_secret(), body.encode(), hashlib.sha256).hexdigest()
@@ -52,9 +51,21 @@ def decode_token_details(token: str) -> tuple[str, int]:
         payload = json.loads(base64.urlsafe_b64decode(body + "=" * (-len(body) % 4)))
         if payload["exp"] < time.time():
             raise ValueError
-        return str(payload["sub"]), int(payload["exp"])
+        return payload
     except (KeyError, ValueError, json.JSONDecodeError):
         raise ShopError(401, "invalid_token", "无效或已过期的访问令牌") from None
+
+
+def decode_token_details(token: str) -> tuple[str, int]:
+    """解析令牌，返回 (user_id, 过期时间戳)；无效或过期时抛出 ShopError。"""
+    payload = _decode_payload(token)
+    return str(payload["sub"]), int(payload["exp"])
+
+
+def decode_token_role(token: str) -> str:
+    """解析令牌角色；历史令牌无 role 声明时按 customer 处理。"""
+    payload = _decode_payload(token)
+    return str(payload.get("role", "customer"))
 
 
 def decode_token(token: str) -> str:
@@ -93,7 +104,9 @@ def decode_confirmation_token(token: str) -> dict[str, object]:
             raise ValueError
         return payload
     except (KeyError, TypeError, ValueError, json.JSONDecodeError):
-        raise ShopError(409, "invalid_confirmation_token", "确认令牌无效或已过期，请重新预览") from None
+        raise ShopError(
+            409, "invalid_confirmation_token", "确认令牌无效或已过期，请重新预览"
+        ) from None
 
 
 def bearer_token(authorization: str | None = Header(default=None)) -> str:
