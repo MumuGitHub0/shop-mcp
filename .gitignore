@@ -6,8 +6,11 @@ dist/
 wheels/
 *.egg-info
 .plan
+.trae
 AGENTS.md
 .idea
 
 # Virtual environments
 .venv
+.env
+*.db

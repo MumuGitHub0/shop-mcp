@@ -7,11 +7,25 @@ authors = [
     { name = "sun", email = "123456@gmail.com" }
 ]
 requires-python = ">=3.11"
-dependencies = []
+dependencies = [
+    "fastapi>=0.115,<1.0",
+    "fastmcp==4.1.0",
+    "python-dotenv>=1.0,<2.0",
+    "uvicorn>=0.30,<1.0",
+]
+
+[dependency-groups]
+dev = [
+    "httpx>=0.28.1",
+    "pytest>=8,<9",
+]
 
 [project.scripts]
-test-shop-mcp = "test_shop_mcp:main"
+test-shop-mcp = "shop.api.main:main"
 
 [build-system]
 requires = ["uv_build>=0.13.0,<0.14.0"]
 build-backend = "uv_build"
+
+[tool.uv.build-backend]
+module-name = "shop"
